@@ -4,12 +4,14 @@ import { I18nProvider, useI18n } from './lib/i18n';
 import TerminalBoot from './components/TerminalBoot';
 import Onboarding from './components/Onboarding';
 import Marketplace from './components/Marketplace';
+import SellerDashboard from './components/SellerDashboard';
+import AgentDashboard from './components/AgentDashboard';
 import Chat from './components/Chat';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { db } from './firebase';
+import { collection, query, where, onSnapshot, orderBy, or } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from './firebase';
 import { Order } from './types';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogIn, LogOut, MessageSquare, Shield, Globe, User, ShieldCheck } from 'lucide-react';
+import { LogIn, LogOut, MessageSquare, Shield, Globe, User, ShieldCheck, LayoutDashboard, ShoppingBag, Wallet, Bell } from 'lucide-react';
 
 function AppContent() {
   const { user, profile, loading, login, logout } = useAuth();
@@ -18,45 +20,29 @@ function AppContent() {
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [showOpsCenter, setShowOpsCenter] = useState(false);
+  const [activeTab, setActiveTab] = useState<'MARKET' | 'DASHBOARD'>('MARKET');
 
   useEffect(() => {
     if (!user) return;
 
+    // Fetch orders where user is buyer, seller, or agent
     const q = query(
       collection(db, 'orders'),
-      where('buyerId', '==', user.uid),
+      or(
+        where('buyerId', '==', user.uid),
+        where('sellerId', '==', user.uid),
+        where('agentId', '==', user.uid)
+      ),
       orderBy('updatedAt', 'desc')
     );
-    const q2 = query(
-      collection(db, 'orders'),
-      where('sellerId', '==', user.uid),
-      orderBy('updatedAt', 'desc')
-    );
 
-    const unsub1 = onSnapshot(q, (snapshot) => {
-      const buyerOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-      setOrders(prev => {
-        const otherOrders = prev.filter(o => o.sellerId === user.uid);
-        return [...buyerOrders, ...otherOrders].sort((a, b) => 
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-        );
-      });
+    const unsub = onSnapshot(q, (snapshot) => {
+      setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'orders');
     });
 
-    const unsub2 = onSnapshot(q2, (snapshot) => {
-      const sellerOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-      setOrders(prev => {
-        const otherOrders = prev.filter(o => o.buyerId === user.uid);
-        return [...sellerOrders, ...otherOrders].sort((a, b) => 
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-        );
-      });
-    });
-
-    return () => {
-      unsub1();
-      unsub2();
-    };
+    return () => unsub();
   }, [user]);
 
   if (!bootComplete) {
@@ -126,7 +112,62 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-terminal-bg text-neon-green font-mono selection:bg-neon-green selection:text-terminal-bg">
-      <Marketplace />
+      {/* Header Navigation */}
+      <div className="fixed top-0 left-0 right-0 z-[100] bg-terminal-bg/80 backdrop-blur-md border-b border-neon-green/20 px-6 py-4 flex justify-between items-center">
+        <div className="flex items-center gap-8">
+          <div className="flex flex-col">
+            <span className="text-2xl font-bold tracking-tighter uppercase leading-none">UDN</span>
+            <span className="text-[8px] tracking-[0.3em] opacity-50 uppercase">Unified Drop Network</span>
+          </div>
+          
+          <nav className="flex gap-4">
+            <button 
+              onClick={() => setActiveTab('MARKET')}
+              className={`px-4 py-1 text-xs uppercase tracking-widest flex items-center gap-2 transition-all ${activeTab === 'MARKET' ? 'bg-neon-green text-terminal-bg font-bold' : 'hover:bg-neon-green/10'}`}
+            >
+              <ShoppingBag size={14} />
+              Market
+            </button>
+            {(profile.role === 'SELLER' || profile.role === 'AGENT' || profile.role === 'admin') && (
+              <button 
+                onClick={() => setActiveTab('DASHBOARD')}
+                className={`px-4 py-1 text-xs uppercase tracking-widest flex items-center gap-2 transition-all ${activeTab === 'DASHBOARD' ? 'bg-neon-green text-terminal-bg font-bold' : 'hover:bg-neon-green/10'}`}
+              >
+                <LayoutDashboard size={14} />
+                {profile.role === 'SELLER' ? 'Seller HQ' : 'Agent Terminal'}
+              </button>
+            )}
+          </nav>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="text-right hidden sm:block">
+            <p className="text-[8px] opacity-50 uppercase tracking-widest leading-none mb-1">Authenticated As</p>
+            <p className="text-xs font-bold uppercase leading-none">{profile.codename}</p>
+          </div>
+          
+          {/* Wallet Balance */}
+          <div className="flex items-center gap-3 px-4 py-2 bg-neon-green/10 border border-neon-green/20 rounded-none">
+            <Wallet size={16} className="text-neon-green" />
+            <div className="flex flex-col">
+              <span className="text-[8px] opacity-50 uppercase tracking-widest leading-none">Balance</span>
+              <span className="text-sm font-bold text-neon-green leading-none">${profile.walletBalance?.toLocaleString() || '0'}</span>
+            </div>
+          </div>
+
+          <div className="w-10 h-10 border border-neon-green flex items-center justify-center bg-neon-green/10">
+            <ShieldCheck size={20} />
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-20 pb-24">
+        {activeTab === 'MARKET' ? (
+          <Marketplace />
+        ) : (
+          profile.role === 'SELLER' ? <SellerDashboard /> : <AgentDashboard />
+        )}
+      </div>
 
       {/* Floating Ops Center Toggle */}
       <div className="fixed bottom-6 right-6 z-[150] flex flex-col items-end gap-3">

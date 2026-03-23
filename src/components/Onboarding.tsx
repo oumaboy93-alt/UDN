@@ -35,6 +35,7 @@ export default function Onboarding() {
       zone,
       codename,
       isVerified: true,
+      walletBalance: 1000, // Initial balance for new users
       stats: {
         drops: 0,
         rating: 5.0,

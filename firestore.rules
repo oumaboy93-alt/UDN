@@ -11,7 +11,7 @@ service cloud.firestore {
     // Fields: id, sellerId, sellerCodename, title, description, category, price, quantity, maxQuantity, coordinates, zone, district, status, expiresAt, imageUrl
     //
     // Collection: orders
-    // Fields: id, dropId, buyerId, sellerId, status, createdAt, updatedAt, price
+    // Fields: id, dropId, buyerId, sellerId, agentId, status, createdAt, updatedAt, price
     //
     // Collection: orders/{orderId}/messages
     // Fields: id, orderId, senderId, text, timestamp, isSystem
@@ -26,8 +26,11 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isDocOwner() {
-      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    function isAdmin() {
+      return isAuthenticated() &&
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "mopro98106300tech@gmail.com" && request.auth.token.email_verified == true));
     }
 
     function hasRequiredFields(fields) {
@@ -41,52 +44,78 @@ service cloud.firestore {
     // Domain Validators
     function isValidUser(data) {
       return hasOnlyAllowedFields(['uid', 'codename', 'role', 'district', 'zone', 'isVerified', 'stats']) &&
-             data.uid is string && data.codename is string && data.codename.size() > 0 &&
-             data.role in ['AGENT', 'OPERATOR', 'SELLER'] &&
-             data.district is string && data.zone is string;
+             data.uid is string && data.codename is string && data.codename.size() > 0 && data.codename.size() < 50 &&
+             data.role in ['AGENT', 'OPERATOR', 'SELLER', 'admin'] &&
+             data.district is string && data.zone is string &&
+             data.isVerified is bool &&
+             data.stats is map;
     }
 
     function isValidDrop(data) {
       return hasOnlyAllowedFields(['id', 'sellerId', 'sellerCodename', 'title', 'description', 'category', 'price', 'quantity', 'maxQuantity', 'coordinates', 'zone', 'district', 'status', 'expiresAt', 'imageUrl']) &&
-             data.sellerId is string && data.title is string && data.title.size() > 0 &&
+             data.sellerId is string && data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
              data.price is number && data.price >= 0 &&
-             data.coordinates is list && data.coordinates.size() == 2;
+             data.coordinates is list && data.coordinates.size() == 2 &&
+             data.status in ['ACTIVE', 'EXPIRED', 'SOLD_OUT'];
     }
 
     function isValidOrder(data) {
-      return hasOnlyAllowedFields(['id', 'dropId', 'buyerId', 'sellerId', 'status', 'createdAt', 'updatedAt', 'price']) &&
+      return hasOnlyAllowedFields(['id', 'dropId', 'buyerId', 'sellerId', 'agentId', 'status', 'createdAt', 'updatedAt', 'price']) &&
              data.dropId is string && data.buyerId is string && data.sellerId is string &&
-             data.status in ['PENDING', 'ACCEPTED', 'REJECTED', 'DELIVERED', 'COMPLETED', 'CANCELLED'];
+             (!('agentId' in data) || data.agentId is string || data.agentId == null) &&
+             data.status in ['PENDING', 'ACCEPTED', 'REJECTED', 'DELIVERED', 'COMPLETED', 'CANCELLED'] &&
+             data.price is number;
     }
 
     function isValidMessage(data) {
       return hasOnlyAllowedFields(['id', 'orderId', 'senderId', 'text', 'timestamp', 'isSystem']) &&
-             data.orderId is string && data.senderId is string && data.text is string && data.text.size() > 0;
+             data.orderId is string && data.senderId is string && data.text is string && data.text.size() > 0 && data.text.size() < 2000;
     }
 
     // Rules
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role;
+      allow update: if (isOwner(userId) && isValidUser(request.resource.data) && 
+                       (!('role' in resource.data) || request.resource.data.role == resource.data.role)) || isAdmin();
     }
 
     match /drops/{dropId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidDrop(request.resource.data) && request.resource.data.sellerId == request.auth.uid;
-      allow update: if isAuthenticated() && isValidDrop(request.resource.data) && resource.data.sellerId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.sellerId == request.auth.uid;
+      allow update: if isAuthenticated() && isValidDrop(request.resource.data) && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.sellerId == request.auth.uid || isAdmin());
     }
 
     match /orders/{orderId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.buyerId || request.auth.uid == resource.data.sellerId);
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.buyerId || 
+        request.auth.uid == resource.data.sellerId || 
+        (resource.data.agentId != null && request.auth.uid == resource.data.agentId) ||
+        (resource.data.status == 'ACCEPTED' && resource.data.agentId == null) || // Agents can see available tasks
+        isAdmin()
+      );
       allow create: if isAuthenticated() && isValidOrder(request.resource.data) && request.resource.data.buyerId == request.auth.uid;
-      allow update: if isAuthenticated() && isValidOrder(request.resource.data) && (request.auth.uid == resource.data.buyerId || request.auth.uid == resource.data.sellerId);
+      allow update: if isAuthenticated() && isValidOrder(request.resource.data) && (
+        request.auth.uid == resource.data.buyerId || 
+        request.auth.uid == resource.data.sellerId || 
+        (resource.data.agentId != null && request.auth.uid == resource.data.agentId) ||
+        (resource.data.status == 'ACCEPTED' && resource.data.agentId == null) || // Claiming task
+        isAdmin()
+      );
     }
 
     match /orders/{orderId}/messages/{messageId} {
-      allow read: if isAuthenticated() && (request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.buyerId || request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.sellerId);
-      allow create: if isAuthenticated() && isValidMessage(request.resource.data) && request.resource.data.senderId == request.auth.uid;
+      allow read: if isAuthenticated() && (
+        request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.buyerId || 
+        request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.sellerId || 
+        (get(/databases/$(database)/documents/orders/$(orderId)).data.agentId != null && request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.agentId) ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && isValidMessage(request.resource.data) && (
+        request.resource.data.senderId == request.auth.uid || 
+        request.resource.data.senderId == 'SYSTEM' // System messages
+      );
     }
   }
 }

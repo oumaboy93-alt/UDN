@@ -54,6 +54,7 @@
         "dropId": { "type": "string" },
         "buyerId": { "type": "string" },
         "sellerId": { "type": "string" },
+        "agentId": { "type": "string" },
         "status": { "type": "string", "enum": ["PENDING", "ACCEPTED", "REJECTED", "DELIVERED", "COMPLETED", "CANCELLED"] },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" },

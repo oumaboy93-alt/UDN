@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, onSnapshot, query, where, addDoc, orderBy, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, onSnapshot, query, where, addDoc, orderBy, serverTimestamp, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { Order, Message } from '../types';
@@ -42,6 +42,8 @@ export default function Chat({ order, onClose }: ChatProps) {
           scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
       }, 100);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `orders/${order.id}/messages`);
     });
 
     return () => {
@@ -65,7 +67,7 @@ export default function Chat({ order, onClose }: ChatProps) {
       await addDoc(collection(db, `orders/${order.id}/messages`), msgData);
       setNewMessage('');
     } catch (error) {
-      console.error('Message failed:', error);
+      handleFirestoreError(error, OperationType.CREATE, `orders/${order.id}/messages`);
     }
   };
 
@@ -74,6 +76,19 @@ export default function Chat({ order, onClose }: ChatProps) {
       const orderRef = doc(db, 'orders', order.id);
       await updateDoc(orderRef, { status, updatedAt: new Date().toISOString() });
       
+      // If delivered, credit the seller
+      if (status === 'DELIVERED') {
+        const sellerRef = doc(db, 'users', order.sellerId);
+        const sellerSnap = await getDoc(sellerRef);
+        if (sellerSnap.exists()) {
+          const sellerData = sellerSnap.data();
+          const currentBalance = sellerData.walletBalance || 0;
+          await updateDoc(sellerRef, {
+            walletBalance: currentBalance + order.price
+          });
+        }
+      }
+
       // Add system message
       await addDoc(collection(db, `orders/${order.id}/messages`), {
         orderId: order.id,
@@ -83,7 +98,7 @@ export default function Chat({ order, onClose }: ChatProps) {
         isSystem: true
       });
     } catch (error) {
-      console.error('Status update failed:', error);
+      handleFirestoreError(error, OperationType.WRITE, `orders/${order.id}`);
     }
   };
 
@@ -160,7 +175,12 @@ export default function Chat({ order, onClose }: ChatProps) {
                   ) : (
                     <div className="max-w-[80%] space-y-1">
                       <div className={`flex items-center gap-2 text-[10px] opacity-50 uppercase tracking-widest ${msg.senderId === user?.uid ? 'flex-row-reverse' : 'flex-row'}`}>
-                        <span>{msg.senderId === user?.uid ? 'YOU' : 'OPERATIVE'}</span>
+                        <span>
+                          {msg.senderId === user?.uid ? 'YOU' : 
+                           msg.senderId === order.sellerId ? 'SELLER' :
+                           msg.senderId === order.buyerId ? 'BUYER' :
+                           msg.senderId === order.agentId ? 'AGENT' : 'OPERATIVE'}
+                        </span>
                         <span>{new Date(msg.timestamp).toLocaleTimeString()}</span>
                       </div>
                       <div className={`p-3 border ${msg.senderId === user?.uid ? 'bg-neon-green text-terminal-bg border-neon-green' : 'bg-neon-green/5 border-neon-green/20'}`}>
@@ -222,7 +242,13 @@ export default function Chat({ order, onClose }: ChatProps) {
                 </div>
               )}
 
-              {user?.uid === order.sellerId && order.status === 'ACCEPTED' && (
+              {user?.uid === order.sellerId && order.status === 'ACCEPTED' && !order.agentId && (
+                <div className="p-3 border border-yellow-500/30 bg-yellow-500/5 text-[8px] uppercase tracking-widest text-center text-yellow-500">
+                  Awaiting Agent Retrieval
+                </div>
+              )}
+
+              {(user?.uid === order.sellerId || user?.uid === order.agentId) && order.status === 'ACCEPTED' && (
                 <button 
                   onClick={() => updateOrderStatus('DELIVERED')}
                   className="w-full py-2 bg-neon-green text-terminal-bg text-[10px] font-bold uppercase tracking-widest hover:bg-neon-green/90 transition-all flex items-center justify-center gap-2"

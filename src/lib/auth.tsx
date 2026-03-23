@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile } from '../types';
 
 interface AuthContextType {
@@ -26,18 +26,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (currentUser) {
         // Fetch profile
         const profileRef = doc(db, 'users', currentUser.uid);
-        const profileSnap = await getDoc(profileRef);
-        
-        if (profileSnap.exists()) {
-          setProfile(profileSnap.data() as UserProfile);
-          // Listen for profile changes
-          onSnapshot(profileRef, (doc) => {
-            if (doc.exists()) {
-              setProfile(doc.data() as UserProfile);
-            }
-          });
-        } else {
-          setProfile(null);
+        try {
+          const profileSnap = await getDoc(profileRef);
+          
+          if (profileSnap.exists()) {
+            setProfile(profileSnap.data() as UserProfile);
+            // Listen for profile changes
+            onSnapshot(profileRef, (doc) => {
+              if (doc.exists()) {
+                setProfile(doc.data() as UserProfile);
+              }
+            }, (error) => {
+              handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
+            });
+          } else {
+            setProfile(null);
+          }
+        } catch (error) {
+          handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
         }
       } else {
         setProfile(null);
@@ -60,7 +66,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = async (data: Partial<UserProfile>) => {
     if (!user) return;
     const profileRef = doc(db, 'users', user.uid);
-    await setDoc(profileRef, { ...profile, ...data, uid: user.uid }, { merge: true });
+    try {
+      await setDoc(profileRef, { ...profile, ...data, uid: user.uid }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${user.uid}`);
+    }
   };
 
   return (

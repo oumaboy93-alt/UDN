@@ -1,4 +1,4 @@
-export type Role = 'AGENT' | 'OPERATOR' | 'SELLER';
+export type Role = 'AGENT' | 'OPERATOR' | 'SELLER' | 'admin';
 
 export interface UserProfile {
   uid: string;
@@ -12,9 +12,12 @@ export interface UserProfile {
     joinedAt: string;
   };
   isVerified: boolean;
+  reputation?: number;
+  walletBalance: number;
+  favorites?: string[];
 }
 
-export type DropCategory = 'TECHWEAR' | 'ELECTRONICS' | 'STREETWEAR' | 'INTELLIGENCE' | 'HARDWARE';
+export type DropCategory = 'TECHWEAR' | 'ELECTRONICS' | 'STREETWEAR' | 'INTELLIGENCE' | 'HARDWARE' | 'MEDICAL';
 
 export interface Drop {
   id: string;
@@ -39,6 +42,7 @@ export interface Order {
   dropId: string;
   buyerId: string;
   sellerId: string;
+  agentId?: string;
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED';
   createdAt: string;
   updatedAt: string;

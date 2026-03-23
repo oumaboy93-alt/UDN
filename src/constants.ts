@@ -18,7 +18,8 @@ export const CATEGORIES = [
   { id: 'ELECTRONICS', label: 'Electronics', icon: 'Cpu' },
   { id: 'STREETWEAR', label: 'Streetwear', icon: 'Shirt' },
   { id: 'INTELLIGENCE', label: 'Intelligence', icon: 'FileText' },
-  { id: 'HARDWARE', label: 'Hardware', icon: 'HardDrive' }
+  { id: 'HARDWARE', label: 'Hardware', icon: 'HardDrive' },
+  { id: 'MEDICAL', label: 'Medical', icon: 'Activity' }
 ];
 
 export const DEMO_DROPS = [
@@ -55,5 +56,22 @@ export const DEMO_DROPS = [
     status: 'ACTIVE',
     expiresAt: new Date(Date.now() + 86400000).toISOString(),
     imageUrl: 'https://picsum.photos/seed/slate/400/300'
+  },
+  {
+    id: 'drop-3',
+    sellerId: 'seller-3',
+    sellerCodename: 'MEDIC-09',
+    title: 'Stimpack-X5',
+    description: 'Advanced medical stimulant for rapid tissue repair and adrenaline boost. 100% pure.',
+    category: 'MEDICAL',
+    price: 300,
+    quantity: 10,
+    maxQuantity: 20,
+    coordinates: [23.8759, 90.3795],
+    zone: 'Uttara',
+    district: 'Dhaka',
+    status: 'ACTIVE',
+    expiresAt: new Date(Date.now() + 86400000 * 3).toISOString(),
+    imageUrl: 'https://picsum.photos/seed/meds/400/300'
   }
 ];
