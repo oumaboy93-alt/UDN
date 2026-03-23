@@ -1,0 +1,5 @@
+{
+  "name": "UDN - Tactical Marketplace",
+  "description": "A brutalist, tactical marketplace for secure drops and real-time operations.",
+  "requestFramePermissions": ["geolocation"]
+}
