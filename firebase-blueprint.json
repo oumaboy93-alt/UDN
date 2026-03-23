@@ -1,0 +1,97 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile data including codename and role.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "codename": { "type": "string" },
+        "role": { "type": "string", "enum": ["AGENT", "OPERATOR", "SELLER"] },
+        "district": { "type": "string" },
+        "zone": { "type": "string" },
+        "isVerified": { "type": "boolean" },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "drops": { "type": "integer" },
+            "rating": { "type": "number" },
+            "joinedAt": { "type": "string", "format": "date-time" }
+          }
+        }
+      },
+      "required": ["uid", "codename", "role", "district", "zone"]
+    },
+    "Drop": {
+      "title": "Drop",
+      "description": "A marketplace listing for a secure drop.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "sellerCodename": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "quantity": { "type": "integer" },
+        "maxQuantity": { "type": "integer" },
+        "coordinates": { "type": "array", "items": { "type": "number" } },
+        "zone": { "type": "string" },
+        "district": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACTIVE", "SOLD_OUT", "EXPIRED"] },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "imageUrl": { "type": "string" }
+      },
+      "required": ["sellerId", "title", "category", "price", "coordinates"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A transaction between a buyer and a seller.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "dropId": { "type": "string" },
+        "buyerId": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "ACCEPTED", "REJECTED", "DELIVERED", "COMPLETED", "CANCELLED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "price": { "type": "number" }
+      },
+      "required": ["dropId", "buyerId", "sellerId", "status"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A chat message within an order.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "isSystem": { "type": "boolean" }
+      },
+      "required": ["orderId", "senderId", "text", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles."
+    },
+    "/drops/{dropId}": {
+      "schema": "Drop",
+      "description": "Marketplace drops."
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Order transactions."
+    },
+    "/orders/{orderId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Order chat messages."
+    }
+  }
+}
